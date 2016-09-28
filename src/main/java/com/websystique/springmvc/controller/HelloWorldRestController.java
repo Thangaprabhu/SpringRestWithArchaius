@@ -1,122 +1,63 @@
 package com.websystique.springmvc.controller;
 
-import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.util.UriComponentsBuilder;
 
-import com.websystique.springmvc.model.User;
+import com.netflix.config.DynamicPropertyFactory;
+import com.netflix.config.DynamicStringProperty;
 import com.websystique.springmvc.service.UserService;
 
 @RestController
 public class HelloWorldRestController {
 
 	@Autowired
-	UserService userService;  //Service which will do all data retrieval/manipulation work
+	UserService userService; 
+	
+	/**
+	 * Below method can read data from application properties too. But here the challenge is to load the properties which changes it value.
+	 * We can not change application properties which is in server folder. 
+	 * 
+	 * 1) So pass additional files using "archaius.configurationSource.additionalUrls"
+	 * 2) First retrieve the value once from API, to add the property to notification mechanism.
+	 * 3) change the property value in file, then you can see the updated value here in SOP. 
+	 *  
+	-Darchaius.configurationSource.additionalUrls=file:////Users/sisuser/log/config.properties
+	myProperty = myValue
+	myProperty1 = myValue1
+	 * @param key
+	 * @return
+	 */
+	
+	@RequestMapping(value = "/property/{key}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+	public String getValue(@PathVariable("key") String key) {
+		DynamicStringProperty myProperty = DynamicPropertyFactory.getInstance().getStringProperty(key,
+				"Property Not Present");
+		System.out.println(myProperty.getValue());
 
-	
-	//-------------------Retrieve All Users--------------------------------------------------------
-	
-	@RequestMapping(value = "/user/", method = RequestMethod.GET)
-	public ResponseEntity<List<User>> listAllUsers() {
-		System.out.println("Fetching All Users");
-		List<User> users = userService.findAllUsers();
-		if(users.isEmpty()){
-			return new ResponseEntity<List<User>>(HttpStatus.NO_CONTENT);//You many decide to return HttpStatus.NOT_FOUND
-		}
-		return new ResponseEntity<List<User>>(users, HttpStatus.OK);
+		/**
+		 * The call back will be on a specific property. Ex: If you call
+		 * "myProperty" in rest API. Then call back will be initialized only for
+		 * "myProperty"
+		 * 
+		 * Lets say you have 5 properties in config.properties. Then to get
+		 * notification on all 5 properties, you need to call rest API 5 times
+		 * with the 5 properties.
+		 * 
+		 * PollProperties.java polls the config.properties every 1 seconds to
+		 * get the updated data.
+		 * 
+		 */
+		myProperty.addCallback(new Runnable() {
+			public void run() {
+				System.out.println("Property " + key + " changed to " + myProperty.getValue());
+			}
+		});
+		return myProperty.getValue();
 	}
 
-
-	//-------------------Retrieve Single User--------------------------------------------------------
-	
-	@RequestMapping(value = "/user/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<User> getUser(@PathVariable("id") long id) {
-		System.out.println("Fetching User with id " + id);
-		User user = userService.findById(id);
-		if (user == null) {
-			System.out.println("User with id " + id + " not found");
-			return new ResponseEntity<User>(HttpStatus.NOT_FOUND);
-		}
-		return new ResponseEntity<User>(user, HttpStatus.OK);
-	}
-
-	
-	
-	//-------------------Create a User--------------------------------------------------------
-	
-	@RequestMapping(value = "/user/", method = RequestMethod.POST)
-	public ResponseEntity<Void> createUser(@RequestBody User user, 	UriComponentsBuilder ucBuilder) {
-		System.out.println("Creating User " + user.getName());
-
-		if (userService.isUserExist(user)) {
-			System.out.println("A User with name " + user.getName() + " already exist");
-			return new ResponseEntity<Void>(HttpStatus.CONFLICT);
-		}
-
-		userService.saveUser(user);
-
-		HttpHeaders headers = new HttpHeaders();
-		headers.setLocation(ucBuilder.path("/user/{id}").buildAndExpand(user.getId()).toUri());
-		return new ResponseEntity<Void>(headers, HttpStatus.CREATED);
-	}
-
-	
-	//------------------- Update a User --------------------------------------------------------
-	
-	@RequestMapping(value = "/user/{id}", method = RequestMethod.PUT)
-	public ResponseEntity<User> updateUser(@PathVariable("id") long id, @RequestBody User user) {
-		System.out.println("Updating User " + id);
-		
-		User currentUser = userService.findById(id);
-		
-		if (currentUser==null) {
-			System.out.println("User with id " + id + " not found");
-			return new ResponseEntity<User>(HttpStatus.NOT_FOUND);
-		}
-
-		currentUser.setName(user.getName());
-		currentUser.setAge(user.getAge());
-		currentUser.setSalary(user.getSalary());
-		
-		userService.updateUser(currentUser);
-		return new ResponseEntity<User>(currentUser, HttpStatus.OK);
-	}
-
-	//------------------- Delete a User --------------------------------------------------------
-	
-	@RequestMapping(value = "/user/{id}", method = RequestMethod.DELETE)
-	public ResponseEntity<User> deleteUser(@PathVariable("id") long id) {
-		System.out.println("Fetching & Deleting User with id " + id);
-
-		User user = userService.findById(id);
-		if (user == null) {
-			System.out.println("Unable to delete. User with id " + id + " not found");
-			return new ResponseEntity<User>(HttpStatus.NOT_FOUND);
-		}
-
-		userService.deleteUserById(id);
-		return new ResponseEntity<User>(HttpStatus.NO_CONTENT);
-	}
-
-	
-	//------------------- Delete All User --------------------------------------------------------
-	
-	@RequestMapping(value = "/user/", method = RequestMethod.DELETE)
-	public ResponseEntity<User> deleteAllUsers() {
-		System.out.println("Deleting All Users");
-
-		userService.deleteAllUsers();
-		return new ResponseEntity<User>(HttpStatus.NO_CONTENT);
-	}
 
 }
